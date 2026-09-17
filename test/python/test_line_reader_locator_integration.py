@@ -1,5 +1,6 @@
 import datetime as dt
 import importlib.util
+import os
 from pathlib import Path
 import shutil
 import sys
@@ -52,6 +53,59 @@ class ReaderLocatorIntegrationTests(unittest.TestCase):
             'captureCompletedAt': dt.datetime.now(dt.timezone.utc).isoformat(),
             'sequence': sequence,
         }
+
+    def test_multiple_main_databases_use_only_unique_current_key_match(self):
+        inactive = self.database.with_name('inactive.edb')
+        inactive.write_bytes(b'inactive encrypted fixture')
+        os.utime(inactive, ns=(1_000_000_000, 1_000_000_000))
+        os.utime(self.database, ns=(2_000_000_000, 2_000_000_000))
+        scope = {'chatName': 'Synthetic', 'dateFrom': '2026-09-11',
+                 'dateTo': '2026-09-11'}
+
+        for inactive_matches in (False, True):
+            with self.subTest(inactive_matches=inactive_matches):
+                captured = []
+                connection = mock.MagicMock()
+                connection.__enter__.return_value.version = {'fixture': True}
+
+                def prefix(path, *, limits):
+                    if path == self.database:
+                        return b'active'
+                    if path == inactive:
+                        return b'inactive'
+                    self.assertEqual(path.name, 'snapshot.edb')
+                    return b'snapshot'
+
+                def capture(source, directory, *, limits):
+                    captured.append(source)
+                    path = directory / 'snapshot.edb'
+                    path.write_bytes(b'encrypted snapshot')
+                    return path, self._snapshot(1)
+
+                def matches(first_page, key):
+                    self.assertEqual(key, b'active-key')
+                    return first_page == b'snapshot' or (
+                        first_page == b'inactive' and inactive_matches)
+
+                with mock.patch.dict(reader.os.environ, {'LOCALAPPDATA': str(self.work)}), \
+                     mock.patch.object(reader, 'read_database_prefix', side_effect=prefix), \
+                     mock.patch.object(reader, 'capture_snapshot_to', side_effect=capture), \
+                     mock.patch.object(reader, 'acquire_passphrase',
+                                       return_value=(b'active-key', {'keyValidated': True})), \
+                     mock.patch.object(reader, 'passphrase_matches', side_effect=matches), \
+                     mock.patch.object(reader, 'Connection', return_value=connection), \
+                     mock.patch.object(reader, 'read_scoped',
+                                       return_value={'messages': [], 'count': 0}), \
+                     mock.patch.object(reader.session_locator, 'commit_after_success'):
+                    if inactive_matches:
+                        with self.assertRaises(reader.ReaderError) as caught:
+                            reader.run(scope)
+                        self.assertEqual(caught.exception.code, 'MAIN_DATABASE_AMBIGUOUS')
+                        self.assertEqual(captured, [])
+                        connection.assert_not_called()
+                    else:
+                        self.assertTrue(reader.run(scope)['freshness']['capturedAfterInitialization'])
+                        self.assertEqual(captured, [self.database])
 
     def _run_patches(self, *, read_result=None, matches=True, read_error=None):
         events = []

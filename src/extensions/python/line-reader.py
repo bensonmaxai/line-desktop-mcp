@@ -103,8 +103,12 @@ def run(args):
     timings['clientBuildVerificationMs'] = round((time.perf_counter() - phase) * 1000, 3)
     paths = list((base/'Data/db').glob('*.edb'))
     main = [p for p in paths if not p.name.startswith(('album','chatStats','keep'))]
-    if len(main) != 1:
+    if not 1 <= len(main) <= 4:
         raise ReaderError('MAIN_DATABASE_AMBIGUOUS')
+    # LINE can retain another signed-in account's database. Prefer the most
+    # recently written candidate, but trust it only after the current process
+    # key validates it and fails to validate every other main database.
+    main.sort(key=lambda path: path.stat().st_mtime_ns, reverse=True)
     try:
         runtime_dir = application_runtime_dir(create=True)
         directory = create_reader_request_directory(runtime_dir)
@@ -118,6 +122,10 @@ def run(args):
         phase = time.perf_counter()
         passphrase, key_metrics = acquire_passphrase(prefix,base,main[0])
         prefix = None
+        for other in main[1:]:
+            other_prefix = read_database_prefix(other, limits=limits)
+            if passphrase_matches(other_prefix, passphrase):
+                raise ReaderError('MAIN_DATABASE_AMBIGUOUS')
         timings['keyAcquisitionMs'] = round((time.perf_counter() - phase) * 1000, 3)
         # Initialization can be slow. Only this fresh, verified encrypted pair
         # is queried; the bootstrap prefix never supplies any returned rows.

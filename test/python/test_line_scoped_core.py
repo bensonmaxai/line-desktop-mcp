@@ -144,6 +144,12 @@ class ScopeTests(unittest.TestCase):
     def test_gui_identity_fails_closed_for_malformed_inventory_rows_and_schema(self):
         gui = {**self.args, 'identityOnly': True, 'guiIdentityOnly': True}
 
+        self.db.execute('INSERT INTO _contact VALUES (?,?,?)', ('u-nameless', None, None))
+        self.db.execute('INSERT INTO _chat VALUES (?,?)', ('u-nameless', 0))
+        self.assertTrue(core.read_scoped(self.db, gui, {})['ok'])
+        self.db.execute('DELETE FROM _contact WHERE _mid=?', ('u-nameless',))
+        self.db.execute('DELETE FROM _chat WHERE _id=?', ('u-nameless',))
+
         self.db.execute('INSERT INTO _groupChat VALUES (?,?)', (None, 'Malformed ID'))
         with self.assertRaises(core.ReaderError) as caught:
             core.read_scoped(self.db, gui, {})

@@ -272,6 +272,11 @@ def _gui_inventory(connection):
                 chat_id, name = row
                 if not _valid_gui_inventory_id(chat_id):
                     raise ReaderError('GUI_IDENTITY_UNAVAILABLE')
+                # A nameless direct-chat row has no literal label that could
+                # collide with the requested visible chat name. Keep scanning
+                # every named row; the target header is verified separately.
+                if kind == 'direct' and name is None:
+                    continue
                 gui_name_family(name)
                 yield kind, chat_id, name
             if len(rows) < GUI_INVENTORY_PAGE:
