@@ -25,7 +25,7 @@ export async function withCuaClient(callback, { deadline } = {}) {
   ]);
   const ajv = createCuaAjv();
   const client = new Client({ name: 'line-desktop-ui-adapter', version: '1.0.0' }, { jsonSchemaValidator: new AjvJsonSchemaValidator(ajv) });
-  const transport = new StdioClientTransport({ command: driverPath, args: ['mcp'], stderr: 'pipe' });
+  const transport = new StdioClientTransport({ command: driverPath, args: process.platform === 'win32' ? ['mcp', '--direct'] : ['mcp'], stderr: 'pipe' });
   // Drain diagnostic output without writing possible UI content into a log.
   transport.stderr?.on('data', () => {});
   let connected = false;
@@ -46,6 +46,7 @@ export async function withCuaClient(callback, { deadline } = {}) {
     const tools = inputValidator.tools;
     const api = {
       tools,
+      acceptsOption: inputValidator.acceptsOption,
       serverVersion: client.getServerVersion(),
       async call(name, args) {
         if (!tools.has(name)) throw new LineToolError('LINE_UI_CAPABILITY_UNAVAILABLE', `The active CUA runtime does not advertise ${name}.`);
@@ -173,6 +174,10 @@ export function createCuaInputValidator(toolDescriptors, { ajv = createCuaAjv() 
   const validators = new Map();
   return {
     tools: new Set(descriptors.keys()),
+    acceptsOption(name, key, value) {
+      const values = descriptors.get(name)?.inputSchema?.properties?.[key]?.enum;
+      return Array.isArray(values) && values.includes(value);
+    },
     validate(name, args) {
       const descriptor = descriptors.get(name);
       if (!descriptor) {
@@ -331,6 +336,7 @@ export async function snapshot(api, target, { screenshot = false, query, maxElem
     const result = await api.call('get_window_state', {
       pid: target.pid, window_id: target.window_id,
       include_screenshot: screenshot, max_elements: maxElements, max_depth: 25,
+      ...(api.acceptsOption?.('get_window_state', 'tree_format', 'elements') ? { tree_format: 'elements' } : {}),
       ...(query ? { query } : {}),
     });
     if (!Array.isArray(result.elements)) throw new LineToolError('LINE_UI_TREE_UNAVAILABLE', 'LINE did not expose a structured accessibility tree. Continue using visual Computer Use.');
@@ -359,10 +365,13 @@ export function exactLabel(labels, roles) {
   return item => labels.includes(item.label) && (!roles || roles.some(role => String(item.role).toLowerCase().includes(role.toLowerCase())));
 }
 
-/** CUA 0.28.2's legacy right_click alias ignores exact-window delivery.
- * Its advertised click(button:right) interface preserves that contract. */
-export function cuaInputInvocation(name,args,version,tools,platform=process.platform) {
-  if(platform!=='win32'||name!=='right_click'||version?.name!=='cua-driver'||version.version!=='0.28.2')return {name,args};
-  if(!tools.has('click'))throw new LineToolError('LINE_UI_CAPABILITY_UNAVAILABLE','This CUA build requires its exact-window click interface for right-click.');
-  return {name:'click',args:{...args,button:'right'}};
+/** These Windows right_click aliases do not preserve background delivery
+ * reliably. Their click(button:right) interface accepts the same exact target. */
+export function cuaInputInvocation(name, args, version, tools, platform = process.platform) {
+  if (platform !== 'win32' || name !== 'right_click' || version?.name !== 'cua-driver'
+      || !['0.28.2', '0.46.1'].includes(version.version)) return { name, args };
+  if (!tools.has('click')) {
+    throw new LineToolError('LINE_UI_CAPABILITY_UNAVAILABLE', 'This CUA build requires its exact-window click interface for right-click.');
+  }
+  return { name: 'click', args: { ...args, button: 'right' } };
 }
