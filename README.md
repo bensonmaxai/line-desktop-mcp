@@ -8,7 +8,9 @@
 
 [繁體中文](README.md) · [English](docs/README.en.md) · [日本語](docs/README.ja.md) · [ภาษาไทย](docs/README.th.md) · [Bahasa Indonesia](docs/README.id.md)
 
-[v3.3.8 更新說明](docs/releases/README.md) · [安裝指南](docs/quickstart-windows.md) · [工具與限制](docs/windows-extensions.md)
+[v3.3.9 更新說明](docs/releases/README.md) · [安裝指南](docs/quickstart-windows.md) · [工具與限制](docs/windows-extensions.md)
+
+**v3.3.9 — Keep 筆記開窗與版本相容修正：** 支援使用內建捷徑自動開啟 Keep 筆記獨立視窗，並適配 Windows CUA Driver 0.46.1 及已核對的 LINE 26.6.0.4004 版本。[更新說明](docs/releases/v3.3.9.zh-TW.md)
 
 **v3.3.8 — 聊天室選取與引用核對修正：** 列出確切名稱候選，以聊天室／帳號參照開啟唯一既有直聊；減少草稿核對的重複快照，修正獨立視窗引用確認，補上收回的實測操作指引。[更新說明](docs/releases/v3.3.8.zh-TW.md)
 

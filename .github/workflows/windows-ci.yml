@@ -1,0 +1,55 @@
+name: Windows CI
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Windows tests
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.12'
+          architecture: x64
+
+      - name: Install Node dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Set up Python fixture dependencies
+        run: |
+          python -m pip install --only-binary=:all: cryptography==50.0.2 Pillow==13.0.0 cffi==2.1.1 pycparser==3.12
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "LINE_MCP_PYTHON=$((Get-Command python -CommandType Application).Source)" >> $env:GITHUB_ENV
+
+      - name: Verify SQLite3MultipleCiphers fixture runtime
+        run: |
+          $archive = Join-Path $env:RUNNER_TEMP 'sqlite3mc.zip'
+          $runtime = Join-Path $env:RUNNER_TEMP 'line-ci-sqlite3mc'
+          Invoke-WebRequest -Uri 'https://github.com/utelle/SQLite3MultipleCiphers/releases/download/v2.5.1/sqlite3mc-2.5.1-sqlite-3.53.4-win64.zip' -OutFile $archive
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne '858c4f2e9e262caca06e6c4fafee62d13dd90c21b649b047f17992bf0402981e') {
+            throw 'SQLite3MultipleCiphers archive hash mismatch.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $runtime
+          $dll = Join-Path $runtime 'dll/sqlite3mc_x64.dll'
+          if ((Get-FileHash -LiteralPath $dll -Algorithm SHA256).Hash -ne '5030decc6d914539e3b9b7e28aa4f6de1e7161dac6fd4b21eb02e6754d9b175e') {
+            throw 'SQLite3MultipleCiphers DLL hash mismatch.'
+          }
+          "LINE_MCP_SQLITE3MC_DLL=$dll" >> $env:GITHUB_ENV
+
+      - name: Run Node tests
+        run: npm test
+      - name: Run Python tests
+        run: npm run test:python
