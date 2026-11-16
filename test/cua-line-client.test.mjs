@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 
-import { callCuaTool, createCuaInputValidator, closeCuaSession, hasMainLineShell, mainLineWindow, requireConfiguredCuaDriver, withCuaClient } from '../src/extensions/cua-line-client.mjs';
+import { callCuaTool, createCuaInputValidator, closeCuaSession, hasMainLineShell, mainLineWindow, requireConfiguredCuaDriver, snapshot, withCuaClient } from '../src/extensions/cua-line-client.mjs';
 import { configuredCuaDriverPath, runtimeRequire } from '../src/extensions/line-runtime.mjs';
 
 // These have the same { name, inputSchema } shape supplied by MCP listTools.
@@ -265,4 +265,27 @@ test('session cleanup preserves the operation error and does not claim an input 
   assert.equal(original.operationMayHaveCompleted,true);
   assert.equal(original.details.sessionCleanupFailed,true);
   await assert.rejects(closeCuaSession(async()=>{throw Error('cleanup failed');},{inputAttempted:true}),e=>e.code==='LINE_UI_SESSION_CLOSE_FAILED'&&e.operationMayHaveCompleted===true);
+});
+
+test('snapshot requests elements only when supported by the live schema', async () => {
+  const target = { pid: 42, window_id: 99 };
+  const base = { pid: 42, window_id: 99, include_screenshot: true,
+    max_elements: 60, max_depth: 25, query: 'fixture' };
+  for (const treeFormat of [undefined, { type: 'string', enum: ['markdown', 'elements', 'both'] }]) {
+    const name = 'get_window_state';
+    const properties = Object.fromEntries(Object.keys(base).map(key => [key, {}]));
+    if (treeFormat) properties.tree_format = treeFormat;
+    const validator = createCuaInputValidator([{ name, inputSchema: {
+      type: 'object', additionalProperties: false, properties,
+    } }]);
+    const api = { acceptsOption: validator.acceptsOption, async call(tool, args) {
+      assert.equal(tool, name);
+      validator.validate(tool, args);
+      assert.deepEqual(args, treeFormat ? { ...base, tree_format: 'elements' } : base);
+      return { elements: [] };
+    } };
+    assert.deepEqual(await snapshot(api, target, {
+      screenshot: true, maxElements: 60, query: 'fixture',
+    }), { elements: [] });
+  }
 });

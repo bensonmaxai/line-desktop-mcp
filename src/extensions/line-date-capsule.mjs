@@ -7,7 +7,9 @@ import { promisify } from 'node:util';
 import { purepngDimensions } from './line-ocr.mjs';
 import { LineToolError } from './line-runtime.mjs';
 const execFile = promisify(execFileCallback);
-export async function locateLineDateCapsule(image) {
+export async function locateLineDateCapsule(image, { timeoutMs = 5_000 } = {}) {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 20_000)
+    throw new LineToolError('LINE_BOUND_CONTEXT_UNVERIFIED', 'Invalid date capsule timeout.');
   const dimensions = purepngDimensions(image);
   if (dimensions.width !== 250 || dimensions.height < 14 || dimensions.height > 50)
     throw new LineToolError('LINE_BOUND_CONTEXT_UNVERIFIED', 'Invalid date capsule crop.');
@@ -18,7 +20,7 @@ export async function locateLineDateCapsule(image) {
     const { stdout } = await execFile(path.join(process.env.SystemRoot || 'C:/Windows',
       'System32/WindowsPowerShell/v1.0/powershell.exe'), ['-NoLogo', '-NoProfile', '-NonInteractive',
       '-ExecutionPolicy', 'Bypass', '-File', fileURLToPath(new URL('./locate-line-date-capsule.ps1', import.meta.url)),
-      '-InputPath', inputPath], { windowsHide: true, timeout: 5000, maxBuffer: 65536, encoding: 'utf8' });
+      '-InputPath', inputPath], { windowsHide: true, timeout: timeoutMs, maxBuffer: 65536, encoding: 'utf8' });
     const result = JSON.parse(stdout.trim());
     if (result.success !== true || result.width !== dimensions.width || result.height !== dimensions.height)
       throw new LineToolError('LINE_BOUND_CONTEXT_UNVERIFIED', 'Date capsule could not be measured.');

@@ -1,6 +1,6 @@
 {
   "name": "line-desktop-mcp",
-  "version": "3.3.8",
+  "version": "3.3.9",
   "description": "LINE Agent MCP: scoped Windows LINE Desktop history, media previews and confirmed reply workflows",
   "main": "./src/server.js",
   "bin": {

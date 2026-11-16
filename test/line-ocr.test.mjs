@@ -209,9 +209,10 @@ test('runs Windows.Media.Ocr against a generated local business-neutral PNG', { 
   assert.equal(result.scaleFactor, 1);
   assert.equal(result.ocrScaleFactor, 2);
   assert.match(result.language, /^(zh-Hant|en)/i);
+  const expectedLabel = /^zh-Hant/i.test(result.language) ? /測試/u : /OCRDEMO/iu;
   const recognizedText = result.lines.map((line) => line.text).join('\n');
   assert.ok(canonicalOcrText(recognizedText).length > 0, 'expected OCR to return text from the generated PNG');
-  assert.match(recognizedText.replace(/\s+/gu, ''), /測試/u, 'expected the local zh-Hant engine to return the generated Taiwan Chinese label');
+  assert.match(recognizedText.replace(/\s+/gu, ''), expectedLabel, 'expected OCR to read the sample label in its selected language');
   assert.doesNotMatch(recognizedText, /\uFFFD/u, 'PowerShell JSON output must stay UTF-8 instead of producing replacement characters');
   const explicitZero=await recognizeLineImage(imageContent,{paddingPixels:0,timeoutMs:20_000});
   assert.deepEqual(explicitZero,result,'paddingPixels:0 keeps the existing OCR result');
@@ -225,7 +226,8 @@ test('runs Windows.Media.Ocr against a generated local business-neutral PNG', { 
   assert.equal(padded.height,260);
   assert.equal(padded.coordinateSpace,'input-png-pixels');
   assert.equal(padded.scaleFactor,1);
-  assert.match(padded.lines.map(line=>line.text).join('').replace(/\s+/gu,''),/測試/u);
+  assert.equal(padded.language, result.language);
+  assert.match(padded.lines.map(line=>line.text).join('').replace(/\s+/gu,''), expectedLabel);
   for(const line of padded.lines){
     assert.ok(line.x>=0 && line.y>=0 && line.x+line.width<=800.001
       && line.y+line.height<=260.001,'padding is removed without clipping original geometry');

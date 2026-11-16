@@ -1,5 +1,13 @@
 # Changelog
 
+## 3.3.9 — 2026-11-16 (Asia/Taipei)
+
+- Adapt the Windows CUA integration to version 0.46.1 structured snapshots and snapshot-bound element tokens.
+- Recognize the exact verified LINE Desktop 26.6.0.4004 executable in the client build allowlist.
+- Open the built-in Keep memo through a bounded identity-only check and its verified shortcut for unbound direct or auto requests. The resulting exact window title does not provide a chat reference or send proof.
+
+An authorized live check started with only the LINE main window and opened Keep memo in a separate window. No message was entered or sent. [Release notes](docs/releases/v3.3.9.en.md).
+
 ## 3.3.8 — 2026-10-14 (Asia/Taipei)
 
 - Add bounded exact-name identity candidates with opaque chat/account references and existing-chat status, without reading messages or media. Paired references can open a unique existing direct chat despite unopened-name collisions; send-context verification and collision refusals remain required.

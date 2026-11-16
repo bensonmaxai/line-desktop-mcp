@@ -27,7 +27,8 @@ import {
 import { withLineOperation } from '../automation/line-operation-lock.mjs';
 import { withLineUiMetrics } from './line-ui-metrics.mjs';
 import { readLocalLineGuiChatIdentity, readLocalLineGuiCandidateIdentity,
-  readLocalLineGuiGroupCandidateIdentity, readLocalLineMessages } from './line-local-reader.mjs';
+  readLocalLineGuiGroupCandidateIdentity, readLocalLineMessages, readKeepOpenIdentity } from './line-local-reader.mjs';
+import { openKeepChat } from './line-keep-open.mjs';
 import { DirectChatProof } from './line-direct-proof.mjs';
 import { GroupChatProof } from './line-group-proof.mjs';
 import { sendPlainText, openExactChat, readPlainIdentity } from './line-plain-send.mjs';
@@ -187,6 +188,7 @@ export class LineUi {
     withClient = withCuaClient,
     readChatIdentity = readLocalLineGuiChatIdentity,
     readNamedIdentity = readPlainIdentity,
+    readKeepIdentity = readKeepOpenIdentity,
     readDirectCandidate = readLocalLineGuiCandidateIdentity,
     readDirectMessages = readLocalLineMessages,
     readGroupCandidate = readLocalLineGuiGroupCandidateIdentity,
@@ -218,6 +220,7 @@ export class LineUi {
     this.withClient = withClient;
     this.readChatIdentity = readChatIdentity;
     this.readNamedIdentity = readNamedIdentity;
+    this.readKeepIdentity = readKeepIdentity;
     this.runOperation = runOperation;
     this.ocr = { recognizeImage, findImageLabel, imageDimensions };
     this.visual = {
@@ -307,6 +310,20 @@ export class LineUi {
     return this.#run('ui-open-chat', async () => {
       const deadline = Date.now() + 30000;
       const check = () => { if (Date.now() >= deadline) throw new LineToolError('LINE_OPEN_TIMEOUT', 'Opening the named chat timed out.'); };
+      if (chatName === 'Keep筆記') {
+        if ((chatType !== undefined && !['auto', 'direct'].includes(chatType))
+            || expectedChatRef !== undefined || expectedOwnSenderRef !== undefined) {
+          throw new LineToolError('LINE_INVALID_ARGUMENT', 'Keep memo opening requires an unbound direct or auto request.');
+        }
+        if (await this.readKeepIdentity() !== true) {
+          throw new LineToolError('LINE_CHAT_IDENTITY_UNVERIFIED', 'The self memo identity could not be verified.');
+        }
+        return this.withClient(async rawApi => {
+          const api = { ...rawApi, call(name, args) { check(); return rawApi.call(name, args); } };
+          await openKeepChat(this, api, check);
+          return { success: true, chatName, verification: 'exact-top-level-window-title', chatType: 'direct' };
+        }, { deadline });
+      }
       const identity = await this.readNamedIdentity({ chatName,
         ...(chatType===undefined?{}:{chatType}),
         ...(expectedChatRef===undefined?{}:{expectedChatRef}),
