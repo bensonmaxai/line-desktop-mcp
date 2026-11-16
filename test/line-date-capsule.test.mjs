@@ -18,6 +18,7 @@ function image(kind){const width=250,height=40,rgba=Buffer.alloc((width*4+1)*hei
  return {type:'image',mimeType:'image/png',data:Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',ihdr),chunk('IDAT',deflateSync(rgba)),chunk('IEND',Buffer.alloc(0))]).toString('base64')};
 }
 test('actual System.Drawing detects complete centered capsule and rejects clipped, rectangle and empty crops',{skip:process.platform!=='win32'},async()=>{
- assert.equal(await locateLineDateCapsule(image('capsule')),true);
- for(const kind of ['clipped','rectangle','empty'])assert.equal(await locateLineDateCapsule(image(kind)),false,kind);
+ const options = { timeoutMs: 20_000 };
+ assert.equal(await locateLineDateCapsule(image('capsule'), options),true);
+ for(const kind of ['clipped','rectangle','empty'])assert.equal(await locateLineDateCapsule(image(kind), options),false,kind);
 });
