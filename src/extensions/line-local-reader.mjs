@@ -130,7 +130,10 @@ export function runReaderProcess(payload, options = {}) {
   try {
     // Internal identity flags are accepted here only because callers have
     // already passed through one of the private identity wrappers below.
-    scope = payload?.mode === 'chatCandidates'
+    if (payload?.mode === 'keepOpenIdentity') {
+      if (Object.keys(payload).length !== 1) throw fail('LINE_INVALID_ARGUMENT');
+      scope = { mode: 'keepOpenIdentity' };
+    } else scope = payload?.mode === 'chatCandidates'
       ? validateCandidateScope(Object.fromEntries(Object.entries(payload).filter(([key]) => key !== 'mode')))
       : payload?.mode === 'recentChats'
       ? { mode: 'recentChats', ...validateRecentScope(Object.fromEntries(Object.entries(payload).filter(([key]) => key !== 'mode'))) }
@@ -451,6 +454,24 @@ async function assertSafeSnapshotFile(target) {
     throw error;
   }
   if (!info.isFile() || info.isSymbolicLink()) throw new Error('unsafe snapshot file');
+}
+
+export async function readKeepOpenIdentity({ runProcess = runReaderProcess } = {}) {
+  const output = await runProcess({ mode: 'keepOpenIdentity' });
+  let result;
+  try {
+    if (typeof output?.stdout !== 'string' || Buffer.byteLength(output.stdout) > MAX_OUTPUT) throw new Error();
+    result = JSON.parse(output.stdout);
+  } catch { throw fail('LOCAL_READER_INVALID_RESULT'); }
+  if (output.code !== 0 || result?.ok !== true) {
+    throw fail(['CHAT_NOT_FOUND', 'CHAT_AMBIGUOUS'].includes(result?.code) ? result.code : 'LOCAL_READER_FAILED');
+  }
+  const keys = Object.keys(result).filter(key => !['retrievedAt', 'freshness', 'readerTiming'].includes(key)).sort().join(',');
+  if (keys !== 'mode,ok' || result.mode !== 'keepOpenIdentity'
+      || result.freshness?.clockOrderValid !== true || result.freshness?.capturedAfterInitialization !== true) {
+    throw fail('LOCAL_READER_INVALID_RESULT');
+  }
+  return true;
 }
 
 export async function readLocalLineChatIdentity(args, options = {}) {

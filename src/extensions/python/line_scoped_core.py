@@ -17,6 +17,10 @@ class ReaderError(Exception):
 
 
 def validate_scope(args):
+    if isinstance(args, dict) and args.get('mode') == 'keepOpenIdentity':
+        if args != {'mode': 'keepOpenIdentity'}:
+            raise ReaderError('INVALID_SCOPE')
+        return args
     if isinstance(args, dict) and args.get('mode') == 'chatCandidates':
         return validate_candidate_scope(args)
     if isinstance(args, dict) and args.get('mode') == 'recentChats':
@@ -531,6 +535,26 @@ def own_sender_ref(connection):
     return reference('sender', mid) if _valid_gui_inventory_id(mid) else None
 
 
+def read_keep_open_identity(connection):
+    """Private, identity-only proof for opening the built-in self memo."""
+    profile = connection.execute('SELECT _mid FROM _profile LIMIT 2').fetchall()
+    if (len(profile) != 1 or not isinstance(profile[0], (tuple, list))
+            or len(profile[0]) != 1 or not _valid_gui_inventory_id(profile[0][0])):
+        raise ReaderError('CHAT_NOT_FOUND')
+    own_mid = profile[0][0]
+    rows = connection.execute(
+        'SELECT _id, _midType FROM _chat WHERE _id = ? LIMIT 2', (own_mid,)).fetchall()
+    if (len(rows) != 1 or not isinstance(rows[0], (tuple, list)) or len(rows[0]) != 2
+            or rows[0][0] != own_mid or type(rows[0][1]) is not int or rows[0][1] != 0):
+        raise ReaderError('CHAT_NOT_FOUND')
+    wanted = gui_name_family('Keep筆記')
+    for kind, chat_id, name in _gui_inventory(
+            connection, allow_unknown_names=True, include_unopened_contacts=True):
+        if name is not None and gui_name_family(name) == wanted and (kind, chat_id) != ('direct', own_mid):
+            raise ReaderError('CHAT_AMBIGUOUS')
+    return {'ok': True, 'mode': 'keepOpenIdentity'}
+
+
 def read_recent_chats(connection, args, *, now=None):
     """List bounded activity metadata without selecting message content."""
     scope = validate_recent_scope(args)
@@ -613,6 +637,9 @@ def read_recent_chats(connection, args, *, now=None):
 def read_scoped(connection, args, snapshot, media_resolver=None, *,
                 message_budget_bytes=3*1024*1024, preview_budget_bytes=1024*1024, media_item_limit=20):
     """connection.execute(sql, parameters).fetchall(); only fixed, scoped SQL."""
+    if isinstance(args, dict) and args.get('mode') == 'keepOpenIdentity':
+        validate_scope(args)
+        return read_keep_open_identity(connection)
     if isinstance(args, dict) and args.get('mode') == 'chatCandidates':
         return read_chat_candidates(connection, args)
     if isinstance(args, dict) and args.get('mode') == 'recentChats':
