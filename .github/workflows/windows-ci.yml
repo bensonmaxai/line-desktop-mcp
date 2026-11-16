@@ -30,9 +30,10 @@ jobs:
 
       - name: Set up Python fixture dependencies
         run: |
-          python -m pip install --only-binary=:all: cryptography==50.0.2 Pillow==13.0.0 cffi==2.1.1 pycparser==3.12
+          $python = Join-Path $env:pythonLocation 'python.exe'
+          & $python -m pip install --only-binary=:all: cryptography==50.0.2 Pillow==13.0.0 cffi==2.1.1 pycparser==3.12
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          "LINE_MCP_PYTHON=$((Get-Command python -CommandType Application).Source)" >> $env:GITHUB_ENV
+          "LINE_MCP_PYTHON=$python" >> $env:GITHUB_ENV
 
       - name: Verify SQLite3MultipleCiphers fixture runtime
         run: |
