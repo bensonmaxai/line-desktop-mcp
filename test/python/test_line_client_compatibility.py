@@ -71,6 +71,10 @@ class ClientCompatibilityTests(unittest.TestCase):
             'version': '26.5.0.3975',
             'bytes': 30628288,
             'sha256': 'efdfc8fc3a5dd59afc9bb561897b8defac59fd212a6775d4400146ae5ccd7040',
+        }, {
+            'version': '26.6.0.4004',
+            'bytes': 31071680,
+            'sha256': 'ce2f4b88857db34bfe4c5d9628daa814a42a75cf41540330d21b6ae5e5548447',
         }])
 
     def test_verified_build_returns_only_public_compatibility_fields(self):
